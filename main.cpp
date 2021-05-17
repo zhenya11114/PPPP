@@ -6,8 +6,21 @@
 #include <vector>
 #include <tuple>
 #include <utility>
+#include <algorithm>
+#include <time.h>
 
 using namespace std;
+
+int randInRange(int min, int max){
+    return min + (rand() % (max - min + 1));
+}
+float randFloatInRange(float min, float max, size_t prec){
+    size_t prec_ = 1;
+    for(size_t i = 0; i < prec; ++i){
+        prec_ *= 10;
+    }
+    return (float)randInRange(min*prec_, max*prec_)/prec_;
+}
 
 class AdMaker {
 public:
@@ -183,8 +196,8 @@ private:
 
 class ContentMaker {
 public:
-	bool addVideo(size_t id, string name, double price) {
-        videoList.push_back(make_tuple(id, name, price));
+    bool addVideo(size_t id, string name, double lenght) {
+        videoList.push_back(make_tuple(id, name, lenght));
 
 		return true;
 	}
@@ -197,7 +210,7 @@ public:
 		}
         return false;
 	}
-	bool changeVideo(size_t id, string name) {
+    bool changeVideo(size_t id, string name) {
         for (size_t i = 0; i < videoList.size(); ++i) {
             if (get<0>(videoList.at(i)) == id) {
                 get<1>(videoList.at(i)) = name;
@@ -392,6 +405,21 @@ public:
     void serveUser(User& user, size_t videoId) {
         ////check if vide extist first!!!////
 
+        bool isVideoExists = false;
+        ContentMaker* cm;
+        for (size_t i = 0; i < contentMakers.size(); ++i) {
+            tuple<size_t, string, double> video = contentMakers.at(i).second.getVideo(videoId);
+            if (get<0>(video) == videoId) {
+                cm = &contentMakers.at(i).second;
+                isVideoExists = true;
+                break;
+            }
+        }
+        if(!isVideoExists){
+            cout << "video not exitsts\n";
+            return;
+        }
+
         bool isVideoBanned = false;
         for (size_t i = 0; i < copyrighters.size(); ++i) {
             isVideoBanned = copyrighters.at(i).second.isBanned(videoId);
@@ -432,23 +460,157 @@ public:
         if (user.getPrimeStatus()) {
             isShowAds = false;
         }
-        else {
-            bool primeStatus = false;
-            for (size_t i = 0; i < contentMakers.size(); ++i) {
-                tuple<size_t, string, double> video = contentMakers.at(i).second.getVideo(videoId);
-                if (get<0>(video) == videoId) {
-                    primeStatus = true;
-                    isShowAds = false;
-                    break;
-                }
-            }
+        if(cm->getPrimeStatus()){
+            isShowAds = false;
         }
 
         if (isShowAds) {
+            cout << "video shown with ads\n";
+            size_t adsAmount;
+            if (cm->getTwoAdsMode()) {
+                adsAmount = 2;
+            }
+            else {
+                tuple<size_t, string, double> video = cm->getVideo(videoId);
+                double lenght = get<2>(video);
+                double singleAdLenght = 5;
+                if(lenght >= singleAdLenght * 2){
+                    adsAmount = lenght/singleAdLenght;//once in 'N' minutes
+                }
+                else{
+                    adsAmount = 2;
+                }
+            }
 
+            if (adSeq.size() == 0) {
+                for(size_t i = 0; i < adMakers.size(); ++i){
+                    for(size_t j = 0; j < adMakers.at(i).second.getAdsList().size(); ++j){
+                        adSeq.push_back (
+                            tuple<size_t, size_t, size_t> (
+                                 i,
+                                 j,
+                                 get<2>(adMakers.at(i).second.getAdsList().at(j))
+                            )
+                        );
+                    }
+                }
+                std::sort (
+                    adSeq.begin(),
+                    adSeq.end(),
+                    [](tuple<size_t, size_t, size_t> i, tuple<size_t, size_t, size_t> j){
+                        return get<2>(i) > get<2>(j);
+                    }
+                );
+            }
+            if (adCountSeq.size() == 0) {
+                for(size_t i = 0; i < adMakers.size(); ++i){
+                    for(size_t j = 0; j < adMakers.at(i).second.getAdsCountList().size(); ++j){
+                        adCountSeq.push_back (
+                            tuple<size_t, size_t, size_t> (
+                                 i,
+                                 j,
+                                 get<2>(adMakers.at(i).second.getAdsCountList().at(j))
+                            )
+                        );
+                    }
+                }
+            }
+
+            float adCountChance = 0.5;
+            float rnd = 0.6;//must be random
+
+            if(adCountSeq.size() == 0){
+                rnd = 0;
+            }
+
+            if (rnd < adCountChance) {
+                //count ad
+                for (size_t i = 0; i < adsAmount; ++i) {
+                    tuple<size_t, size_t, size_t> t = adCountSeq.at(0);
+                    cout << i << " ad made by admaker with id " << adMakers.at(get<0>(t)).first;
+                    cout << ", show add with id " << get<0>(adMakers.at(get<0>(t)).second.getAdsList().at(get<1>(t)));
+                    cout << endl;
+
+                    --get<2>(adCountSeq.at(0));
+                    --adsAmount;
+
+                    if (adCountSeq.size() != 0) {
+                        if (get<2>(adCountSeq.at(0)) == 0) {
+                            adCountSeq.erase(adCountSeq.begin());
+                        }
+                    }
+                    if (adCountSeq.size() == 0) {
+                        goto NOADDCOUNT;
+                    }
+
+                    cout << "payed " << 1 << " to content maker for this ad\n";
+                    cm->payMoney(1);
+                }
+            }
+            else {
+                //default ad
+                NOADDCOUNT:;
+
+                double totalPrice = 0;
+                for (size_t j = 0; j < adSeq.size(); ++j) {
+                    tuple<size_t, size_t, size_t> t = adSeq.at(j);
+                    double price = get<2>(t);
+                    totalPrice += price;
+                }
+
+                for (size_t i = 0; i < adsAmount; ++i) {
+                    float biggest = 0;
+                    size_t biggestIndex;
+
+                    for (size_t j = 0; j < adSeq.size(); ++j) {
+                        tuple<size_t, size_t, size_t> t = adSeq.at(j);
+                        double price = get<2>(t);
+                        rnd = randFloatInRange(0, price/totalPrice, 3);
+                        if(rnd > biggest){
+                            biggest = rnd;
+                            biggestIndex = j;
+                        }
+                    }
+
+                    tuple<size_t, size_t, size_t> t = adSeq.at(biggestIndex);
+
+                    cout << i << " ad made by admaker with id " << adMakers.at(get<0>(t)).first;
+                    cout << ", show add with id " << get<0>(adMakers.at(get<0>(t)).second.getAdsList().at(get<1>(t)));
+                    cout << endl;
+
+                    cout << "payed " << 1 << " to content maker for this ad\n";
+                    cm->payMoney(1);
+                }
+            }
+
+            float barProgress = 0.6;//must be random
+            if (barProgress >= 0.5) {
+                cout << "video shown, payed " << 5 << " to content maker\n";
+                cm->payMoney(5);
+            }
         }
         else {
+            cout << "video shown with no ads\n";
 
+            bool isVideoDemonetized = false;
+            for (size_t i = 0; i < copyrighters.size(); ++i) {
+                isVideoDemonetized = copyrighters.at(i).second.isDemonetized(videoId);
+                if(isVideoDemonetized == true){
+                    break;
+                }
+            }
+
+            float barProgress = 0.6;//must be random
+
+            if (isVideoDemonetized) {
+                cout << "video shown with no payments to content maker\n";
+            }
+            else {
+                if (barProgress >= 0.5) {
+                    cout << "video shown, payed " << 5 << " to content maker\n";
+                    cm->payMoney(5);
+                }
+            }
         }
 	}
 private:
@@ -456,19 +618,24 @@ private:
     vector<pair<size_t, Copyrighter>> copyrighters;
     vector<pair<size_t, ContentMaker>> contentMakers;
     vector<pair<size_t, User>> users;
+
+    vector<tuple<size_t, size_t, size_t>> adSeq;
+    vector<tuple<size_t, size_t, size_t>> adCountSeq;
 };
 
 int main() {
+    srand(time(NULL));
+
     Hosting h;
 
     size_t counter = 0, counter1 = 0, counter2 = 0;
     for (size_t i = 0; i < 3; ++i) {
         AdMaker am;
-        am.addAd(counter++, "", 5);
-        am.addAd(counter++, "", 5);
+        am.addAd(counter++, "", 2+counter);
+        am.addAd(counter++, "", 5+counter);
 
-        am.addCountAd(counter1++, "", 5);
-        am.addCountAd(counter1++, "", 5);
+        am.addCountAd(counter1++, "", 3);
+        am.addCountAd(counter1++, "", 4);
 
         h.addAdMaker(counter2++, am);
     }
@@ -492,8 +659,8 @@ int main() {
         cm.addVideo(counter++, "", 5);
 
         cm.payMoney(100);
-        cm.subscribePrime(5);
-        cm.switchTwoAdsMode();
+//        cm.subscribePrime(5);
+//        cm.switchTwoAdsMode();
 
         h.addContentMaker(counter2++, cm);
     }
