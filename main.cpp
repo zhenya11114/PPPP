@@ -403,8 +403,6 @@ public:
 	}
 
     void serveUser(User& user, size_t videoId) {
-        ////check if vide extist first!!!////
-
         bool isVideoExists = false;
         ContentMaker* cm;
         for (size_t i = 0; i < contentMakers.size(); ++i) {
@@ -429,7 +427,7 @@ public:
         }
 
         bool isUserHavePerm = true;
-        bool userPayPrompt = true;//must be random
+        bool userPayPrompt = randFloatInRange(0,1,3) > 0.5 ? true : false;
         if (isVideoBanned) {
             isUserHavePerm = false;
             for (size_t i = 0; i < copyrighters.size(); ++i) {
@@ -444,6 +442,9 @@ public:
                             cout << "user have not enough money to pay for video shown\n";
                         }
                         break;
+                    }
+                    else {
+                        cout << "user managed not to pay for access to video\n";
                     }
                 }
             }
@@ -517,7 +518,7 @@ public:
             }
 
             float adCountChance = 0.5;
-            float rnd = 0.6;//must be random
+            float rnd = randFloatInRange(0,1,3);
 
             if(adCountSeq.size() == 0){
                 rnd = 0;
@@ -525,6 +526,7 @@ public:
 
             if (rnd < adCountChance) {
                 //count ad
+                cout << "count ads\n";
                 for (size_t i = 0; i < adsAmount; ++i) {
                     tuple<size_t, size_t, size_t> t = adCountSeq.at(0);
                     cout << i << " ad made by admaker with id " << adMakers.at(get<0>(t)).first;
@@ -551,6 +553,7 @@ public:
                 //default ad
                 NOADDCOUNT:;
 
+                cout << "default ads\n";
                 double totalPrice = 0;
                 for (size_t j = 0; j < adSeq.size(); ++j) {
                     tuple<size_t, size_t, size_t> t = adSeq.at(j);
@@ -583,7 +586,7 @@ public:
                 }
             }
 
-            float barProgress = 0.6;//must be random
+            float barProgress = randFloatInRange(0,1,3);
             if (barProgress >= 0.5) {
                 cout << "video shown, payed " << 5 << " to content maker\n";
                 cm->payMoney(5);
@@ -600,7 +603,7 @@ public:
                 }
             }
 
-            float barProgress = 0.6;//must be random
+            float barProgress = randFloatInRange(0,1,3);
 
             if (isVideoDemonetized) {
                 cout << "video shown with no payments to content maker\n";
@@ -668,5 +671,10 @@ int main() {
     User u;
     u.payMoney(100);
 //    u.subscribePrime(5);
+    h.serveUser(u, 3);
+    h.serveUser(u, 3);
+    h.serveUser(u, 3);
+    h.serveUser(u, 3);
+    h.serveUser(u, 3);
     h.serveUser(u, 3);
 }
